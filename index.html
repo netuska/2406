@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>VM and Container Topology</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #fafafa;
+            padding: 40px;
+        }
+        .vm-top {
+            margin-bottom: 50px;
+        }
+        .vm {
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            display: inline-block;
+            margin: 20px;
+            padding: 15px;
+            background-color: #fff;
+        }
+        .vm h3 {
+            margin-top: 0;
+        }
+        .container {
+            background-color: #007bff;
+            color: #fff;
+            margin: 5px;
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+        .vm-grid {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>VM and Container Deployment Topology</h1>
+
+    {% if vm_map %}
+        <div class="vm-top">
+            {% if 'vm1' in vm_map %}
+                <div class="vm">
+                    <h3>VM1</h3>
+                    {% for agent in vm_map['vm1'] %}
+                        <div class="container">{{ agent }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="vm-grid">
+            {% for vm, agents in vm_map.items() %}
+                {% if vm != 'vm1' %}
+                <div class="vm">
+                    <h3>{{ vm|upper }}</h3>
+                    {% for agent in agents %}
+                        <div class="container">{{ agent }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    {% else %}
+        <p>No agent data available.</p>
+    {% endif %}
+</body>
+</html>
