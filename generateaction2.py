@@ -5,6 +5,7 @@ import time
 from flask import Flask, request, jsonify
 import requests
 import os
+from itertools import permutations
 
 # ---------------------- Config ----------------------
 
@@ -34,17 +35,19 @@ last_energy = None
 # ---------------------- Functions ----------------------
 
 def encode_state(agent_counts):
-    """Encodes the current state as a tuple."""
     return (agent_counts.get('agent1', 0), agent_counts.get('agent2', 0))
 
 def generate_possible_actions(agent_counts, vm_names):
-    """Generate all possible actions: mapping agents to VMs."""
-    from itertools import permutations
-    agents = list(agent_counts.keys())
-    return list(permutations(vm_names, len(agents)))
+    agents = [agent for agent, count in agent_counts.items() for _ in range(count)]
+    possible_actions = []
+    for assignment in permutations(vm_names * len(agents), len(agents)):
+        strategy = {vm: [] for vm in vm_names}
+        for agent, vm in zip(agents, assignment):
+            strategy[vm].append(agent)
+        possible_actions.append(assignment)
+    return possible_actions
 
 def choose_best_action(state, actions, epsilon=EPSILON):
-    """Epsilon-greedy action selection."""
     if random.random() < epsilon:
         return random.choice(actions)
     q_values = [q_table.get((state, action), 0.0) for action in actions]
@@ -53,16 +56,14 @@ def choose_best_action(state, actions, epsilon=EPSILON):
     return random.choice(best_actions)
 
 def update_q_table(state, action, reward):
-    """Standard Q-learning update."""
     current_q = q_table.get((state, action), 0.0)
-    future_q = max([q_table.get((state, a), 0.0) for a in generate_possible_actions({'agent1': 1, 'agent2': 1}, list(set(action)))], default=0.0)
+    future_q = max([q_table.get((state, a), 0.0) for a in q_table if a[0] == state], default=0.0)
     new_q = current_q + ALPHA * (reward + GAMMA * future_q - current_q)
     q_table[(state, action)] = new_q
     with open(Q_TABLE_PATH, 'wb') as f:
         pickle.dump(q_table, f)
 
 def fetch_energy_from_prometheus():
-    """Fetch total host energy (microjoules) from Prometheus."""
     query = 'scaph_host_energy_microjoules{job="scaphandre-qemu"}'
     try:
         response = requests.get(f"{PROMETHEUS_URL}/api/v1/query", params={"query": query})
@@ -90,6 +91,10 @@ def placement_strategy():
     chosen_action = choose_best_action(state, actions)
     current_energy = fetch_energy_from_prometheus()
 
+    # Map action (list) to agent->VM dictionary
+    agent_names = list(agent_counts.keys())
+    action_dict = {agent: vm for agent, vm in zip(agent_names, chosen_action)}
+
     if last_state is not None and last_energy is not None:
         energy_used = current_energy - last_energy
         reward = -energy_used
@@ -99,7 +104,7 @@ def placement_strategy():
     last_state = state
     last_energy = current_energy
 
-    return jsonify(chosen_action)
+    return jsonify(action_dict)
 
 @app.route('/q_table', methods=['GET'])
 def get_q_table():
